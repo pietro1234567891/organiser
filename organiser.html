@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Personal Organizer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+const daysOfWeek = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const hours = Array.from({length:12},(_,i)=>i+8);
+
+function App(){
+  const [events,setEvents]=useState(()=>{const saved=localStorage.getItem('events');return saved?JSON.parse(saved):[]});
+  const [todos,setTodos]=useState(()=>{const saved=localStorage.getItem('todos');return saved?JSON.parse(saved):[]});
+  const [showForm,setShowForm]=useState(false);
+  const [editingEvent,setEditingEvent]=useState(null);
+  const [formData,setFormData]=useState({title:'',subtitle:'',link:'',notes:'',day:'Mon',start:'08:00',end:'09:00',color:'#3b82f6',type:'Lesson',customType:'',repeatDays:[]});
+
+  useEffect(()=>{localStorage.setItem('events',JSON.stringify(events))},[events]);
+  useEffect(()=>{localStorage.setItem('todos',JSON.stringify(todos))},[todos]);
+
+  const addOrUpdateEvent=()=>{
+    let eventType=formData.type==='Other'?formData.customType:formData.type;
+    const baseEvent={id:editingEvent?editingEvent.id:Date.now(),title:formData.title,subtitle:formData.subtitle,link:formData.link,notes:formData.notes,start:formData.start,end:formData.end,color:formData.color,type:eventType};
+    let newEvents=[];
+    if(formData.repeatDays.length>0){
+      newEvents=formData.repeatDays.map(day=>({...baseEvent,id:Date.now()+Math.random(),day}));
+    }else{newEvents=[{...baseEvent,day:formData.day}];
+    }
+    if(editingEvent){setEvents(events.map(e=>e.id===editingEvent.id?newEvents[0]:e))}else{setEvents([...events,...newEvents]);}
+    setShowForm(false);setEditingEvent(null);
+  };
+
+  const deleteEvent=(id)=>{setEvents(events.filter(e=>e.id!==id));};
+  const addTodo=(text)=>{setTodos([...todos,{id:Date.now(),text}]);};
+  const deleteTodo=(id)=>{setTodos(todos.filter(t=>t.id!==id));};
+  const moveTodo=(id,d)=>{const i=todos.findIndex(t=>t.id===id);if(i<0)return;const copy=[...todos];const [item]=copy.splice(i,1);copy.splice(i+d,0,item);setTodos(copy);};
+
+  return(
+    <div className="grid grid-cols-4 gap-4 h-screen p-4">
+      <div className="col-span-3 bg-white rounded-2xl shadow p-4 overflow-auto">
+        <h2 className="text-xl font-bold mb-4">Weekly Calendar</h2>
+        <div className="grid grid-cols-8 border-t border-l text-sm">
+          <div className="border-b border-r p-2">Time</div>
+          {daysOfWeek.map(d=><div key={d} className="border-b border-r p-2 text-center font-semibold">{d}</div>)}
+          {hours.map(hour=><React.Fragment key={hour}>
+            <div className="border-b border-r p-2">{hour}:00</div>
+            {daysOfWeek.map(day=><div key={day} className="border-b border-r relative h-16">
+              {events.filter(e=>e.day===day&&e.start.startsWith(hour.toString().padStart(2,'0'))).map(e=><div key={e.id} className="absolute inset-0 m-1 p-1 rounded text-white cursor-pointer" style={{backgroundColor:e.color}} onClick={()=>{setEditingEvent(e);setFormData({...e,type:['Lesson','Appointment'].includes(e.type)?e.type:'Other',customType:!['Lesson','Appointment'].includes(e.type)?e.type:'',repeatDays:[]});setShowForm(true);}}><div className="font-bold truncate">{e.title}</div></div>)}
+            </div>)}
+          </React.Fragment>)}
+        </div>
+        <button className="mt-4 flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-xl shadow" onClick={()=>{setEditingEvent(null);setFormData({title:'',subtitle:'',link:'',notes:'',day:'Mon',start:'08:00',end:'09:00',color:'#3b82f6',type:'Lesson',customType:'',repeatDays:[]});setShowForm(true);}}>Add Event</button>
+      </div>
+
+      <div className="col-span-1 bg-white rounded-2xl shadow p-4 flex flex-col">
+        <h2 className="text-xl font-bold mb-4">To-Do List</h2>
+        <div className="flex gap-2 mb-2">
+          <input type="text" placeholder="New task..." className="flex-1 border rounded px-2 py-1" onKeyDown={e=>{if(e.key==='Enter'&&e.target.value.trim()){addTodo(e.target.value);e.target.value='';}}} />
+        </div>
+        <ul className="space-y-2 overflow-auto">
+          {todos.map((t,i)=><li key={t.id} className="flex items-center justify-between bg-gray-100 p-2 rounded-xl"><span>{t.text}</span><div className="flex items-center gap-2"><button onClick={()=>moveTodo(t.id,-1)} disabled={i===0}>↑</button><button onClick={()=>moveTodo(t.id,1)} disabled={i===todos.length-1}>↓</button><button onClick={()=>deleteTodo(t.id)} className="text-red-500">X</button></div></li>)}
+        </ul>
+      </div>
+
+      {showForm&&<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-6 w-96 shadow-lg overflow-auto max-h-[90vh]">
+          <h3 className="text-lg font-bold mb-4">{editingEvent?'Edit Event':'New Event'}</h3>
+          <input type="text" placeholder="Title" className="w-full border mb-2 p-2 rounded" value={formData.title} onChange={e=>setFormData({...formData,title:e.target.value})}/>
+          <input type="text" placeholder="Subtitle" className="w-full border mb-2 p-2 rounded" value={formData.subtitle} onChange={e=>setFormData({...formData,subtitle:e.target.value})}/>
+          <input type="url" placeholder="Link" className="w-full border mb-2 p-2 rounded" value={formData.link} onChange={e=>setFormData({...formData,link:e.target.value})}/>
+          <textarea placeholder="Notes" className="w-full border mb-2 p-2 rounded" value={formData.notes} onChange={e=>setFormData({...formData,notes:e.target.value})}/>
+          <label className="block mb-2">Day:</label>
+          <select className="w-full border mb-2 p-2 rounded" value={formData.day} onChange={e=>setFormData({...formData,day:e.target.value})}>{daysOfWeek.map(d=><option key={d} value={d}>{d}</option>)}</select>
+          <label className="block mb-2">Repeat on days:</label>
+          <div className="grid grid-cols-4 gap-2 mb-2">{daysOfWeek.map(d=><label key={d} className="flex items-center gap-1"><input type="checkbox" checked={formData.repeatDays.includes(d)} onChange={e=>{if(e.target.checked){setFormData({...formData,repeatDays:[...formData.repeatDays,d]});}else{setFormData({...formData,repeatDays:formData.repeatDays.filter(x=>x!==d)});}}}/>{d}</label>)}</div>
+          <div className="flex gap-2 mb-2"><input type="time" className="flex-1 border p-2 rounded" value={formData.start} onChange={e=>setFormData({...formData,start:e.target.value})}/><input type="time" className="flex-1 border p-2 rounded" value={formData.end} onChange={e=>setFormData({...formData,end:e.target.value})}/
